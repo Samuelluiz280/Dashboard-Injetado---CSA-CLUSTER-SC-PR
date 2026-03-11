@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Dashboard Injetado - Relatórios CSA
+// @name         Robô Extrator - Múltiplas Filas
 // @namespace    http://tampermonkey.net/
-// @version      2.0
-// @description  Clica em Buscar, salva dados e envia SINAL DE VIDA
+// @version      4.0
+// @description  Clica em Buscar, lê a tabela e separa os dados em CSA, SAC e FILA N2!
 // @author       S@muel Luiz
 // @match        *://hpbx01.brasiltecpar.com.br/manager/*
 // @grant        none
@@ -14,8 +14,7 @@
     function extrairDadosRelatorio() {
         const botoes = document.querySelectorAll('button');
         const btnBuscar = Array.from(botoes).find(b => b.innerText.trim() === 'Buscar');
-
-        if (!btnBuscar) return;
+        if (!btnBuscar) return; 
 
         btnBuscar.click();
 
@@ -23,8 +22,12 @@
             const linhas = document.querySelectorAll('tbody tr');
             if (linhas.length === 0) return;
 
-            let atendidas = 0; let perdidas = 0;
-            let totalEsperaSeg = 0; let totalFaladoSeg = 0;
+            
+            const totais = {
+                'CSA': { atendidas: 0, perdidas: 0, esperaSeg: 0, faladoSeg: 0, gaveta: 'csa_dados_relatorio' },
+                'SAC': { atendidas: 0, perdidas: 0, esperaSeg: 0, faladoSeg: 0, gaveta: 'sac_fin_dados_relatorio' },
+                'FILAN2': { atendidas: 0, perdidas: 0, esperaSeg: 0, faladoSeg: 0, gaveta: 'filan2_dados_relatorio' }
+            };
 
             const tempoParaSeg = (tempoStr) => {
                 const partes = tempoStr.split(':');
@@ -33,7 +36,7 @@
             };
 
             const segParaTempo = (segundos) => {
-                if (isNaN(segundos) || segundos < 0) return "00:00:00";
+                if (isNaN(segundos) || segundos <= 0) return "00:00:00";
                 const h = Math.floor(segundos / 3600).toString().padStart(2, '0');
                 const m = Math.floor((segundos % 3600) / 60).toString().padStart(2, '0');
                 const s = Math.floor(segundos % 60).toString().padStart(2, '0');
@@ -43,30 +46,44 @@
             linhas.forEach(linha => {
                 const colunas = linha.querySelectorAll('td');
                 if (colunas.length >= 13) {
+                    const filaNome = colunas[3].innerText.trim().toUpperCase(); 
                     const status = colunas[13].innerText.trim().toLowerCase();
                     const esperaStr = colunas[11].innerText.trim();
                     const faladoStr = colunas[12].innerText.trim();
 
-                    if (status.includes('atendida')) { atendidas++; } else { perdidas++; }
-                    totalEsperaSeg += tempoParaSeg(esperaStr);
-                    totalFaladoSeg += tempoParaSeg(faladoStr);
+                    
+                    let setor = null;
+                    if (filaNome.includes('FILA_CSA_N2')) setor = 'FILAN2';
+                    else if (filaNome.includes('FILA_CSA')) setor = 'CSA'; 
+                    else if (filaNome.includes('FILA_SAC_FINANCEIRO')) setor = 'SAC';
+
+                    if (setor) {
+                        if (status.includes('atendida')) { totais[setor].atendidas++; } 
+                        else { totais[setor].perdidas++; }
+                        
+                        totais[setor].esperaSeg += tempoParaSeg(esperaStr);
+                        totais[setor].faladoSeg += tempoParaSeg(faladoStr);
+                    }
                 }
             });
 
-            const oferecidas = atendidas + perdidas;
-            const medEspera = oferecidas > 0 ? segParaTempo(totalEsperaSeg / oferecidas) : "00:00:00";
-            const medConversacao = atendidas > 0 ? segParaTempo(totalFaladoSeg / atendidas) : "00:00:00";
-
             
-            const dadosParaSalvar = {
-                oferecidas, atendidas, perdidas, medConversacao, medEspera,
-                timestamp: Date.now() 
-            };
-            localStorage.setItem('csa_dados_relatorio', JSON.stringify(dadosParaSalvar));
+            for (const key in totais) {
+                const s = totais[key];
+                const oferecidas = s.atendidas + s.perdidas;
+                const medEspera = oferecidas > 0 ? segParaTempo(s.esperaSeg / oferecidas) : "00:00:00";
+                const medConversacao = s.atendidas > 0 ? segParaTempo(s.faladoSeg / s.atendidas) : "00:00:00";
 
-        }, 1500);
+                const dadosParaSalvar = {
+                    oferecidas, atendidas: s.atendidas, perdidas: s.perdidas, 
+                    medConversacao, medEspera, timestamp: Date.now() 
+                };
+                localStorage.setItem(s.gaveta, JSON.stringify(dadosParaSalvar));
+            }
+
+        }, 1500); 
     }
 
-  
+    
     setInterval(extrairDadosRelatorio, 8000);
 })();
