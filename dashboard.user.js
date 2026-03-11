@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Dashboard Injetado - CSA CLUSTER SC/PR
+// @name         Dashboard Injetado - 3 em 1 
 // @namespace    http://tampermonkey.net/
-// @version      3.2
-// @description  Tabela Acrílico, Relógio Real-time e Monitoramento de Erros (Watchdog)
+// @version      4.0
+// @description  Três botões externos para abrir o painel já configurado
 // @author       S@muel Luiz
 // @match        *://hpbx01.brasiltecpar.com.br/manager/*
 // @grant        none
@@ -10,6 +10,33 @@
 
 (function() {
     'use strict';
+
+    
+    const CONFIG_SETORES = {
+        'CSA': {
+            titulo: 'CSA CLUSTER SC/PR',
+            fila: 'FILA_CSA_GGNET',
+            grupo: 'GRUPO_CSA_GGNET',
+            gaveta: 'csa_dados_relatorio',
+            corBotao: '#40C4FF' // Azul
+        },
+        'SAC': {
+            titulo: 'SAC FINANCEIRO - GGNET',
+            fila: 'FILA_SAC_FINANCEIRO',
+            grupo: 'GRUPO_SAC_FI',
+            gaveta: 'sac_fin_dados_relatorio',
+            corBotao: '#00E676' // Verde
+        },
+        'FILAN2': {
+            titulo: 'FILA N2 - GGNET',
+            fila: 'FILA_CSA_N2_GGNET',
+            grupo: 'GRUPO_CSA_N2',
+            gaveta: 'filan2_dados_relatorio',
+            corBotao: '#FF9100' // Laranja
+        }
+    };
+
+    let setorAtivo = 'CSA';
 
     
     const estilos = `
@@ -22,17 +49,22 @@
         #meu-dashboard-customizado * { box-sizing: border-box; }
 
         #meu-dashboard-customizado .navbar {
-            background-color: rgba(38, 50, 56, 0.98); color: white; height: 60px; display: flex;
+            background-color: rgba(38, 50, 56, 0.98); color: white; height: 70px; display: flex;
             align-items: center; justify-content: space-between; padding: 0 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); position: sticky; top: 0; z-index: 100;
         }
         #meu-dashboard-customizado .nav-left { display: flex; align-items: center; }
-        #meu-dashboard-customizado .brand { font-size: 22px; font-weight: bold; margin-right: 40px; color: #fff; letter-spacing: 1px; text-transform: uppercase; }
-        #meu-dashboard-customizado .tab-btn { background: transparent; border: none; color: #b0bec5; font-size: 16px; font-weight: 600; padding: 0 20px; height: 60px; cursor: pointer; border-bottom: 4px solid transparent; transition: all 0.3s ease; }
+        #meu-dashboard-customizado .brand { font-size: 22px; font-weight: bold; margin-right: 20px; color: #fff; letter-spacing: 1px; text-transform: uppercase; width: 290px; }
+
+        /* BOTÕES SELETORES DE SETOR INTERNOS */
+        .seletor-setor { display: flex; gap: 10px; margin-right: 30px; border-right: 1px solid rgba(255,255,255,0.2); padding-right: 20px;}
+        .btn-setor { background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 6px 15px; border-radius: 20px; cursor: pointer; transition: 0.3s; font-weight: bold; font-size: 13px; text-transform: uppercase; outline: none;}
+        .btn-setor.ativo { background: #40C4FF; color: #000; box-shadow: 0 0 10px rgba(64,196,255,0.5); border-color: transparent;}
+        .btn-setor:hover:not(.ativo) { background: rgba(255,255,255,0.2); }
+
+        #meu-dashboard-customizado .tab-btn { background: transparent; border: none; color: #b0bec5; font-size: 16px; font-weight: 600; padding: 0 15px; height: 70px; cursor: pointer; border-bottom: 4px solid transparent; transition: all 0.3s ease; }
         #meu-dashboard-customizado .tab-btn:hover { color: white; background-color: rgba(255,255,255,0.1); }
         #meu-dashboard-customizado .tab-btn.active { color: white; border-bottom: 4px solid #40C4FF; background-color: rgba(255,255,255,0.1); }
-        #meu-dashboard-customizado .btn-fechar-dash { background: #FF1744; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; text-transform: uppercase; }
 
-        /* NOVOS ESTILOS DO PAINEL DE STATUS E RELÓGIO */
         #meu-dashboard-customizado .status-container { display: flex; align-items: center; gap: 15px; margin-left: 20px; background: rgba(0,0,0,0.25); padding: 5px 15px; border-radius: 30px; border: 1px solid rgba(255,255,255,0.1);}
         #meu-dashboard-customizado .relogio-top { font-size: 18px; font-weight: 900; color: #40C4FF; letter-spacing: 1.5px; border-right: 1px solid rgba(255,255,255,0.2); padding-right: 15px; }
         #meu-dashboard-customizado .conn-status { font-size: 12px; font-weight: bold; color: #fff; display: flex; align-items: center; transition: color 0.3s;}
@@ -49,7 +81,6 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
 
         #meu-dashboard-customizado .grid-dashboard { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
-
         #meu-dashboard-customizado .card { background: rgba(255, 255, 255, 0.95); border-radius: 8px; padding: 15px; color: #333; box-shadow: 0 4px 15px rgba(0,0,0,0.15); height: 240px; display: flex; flex-direction: column; justify-content: space-between; text-align: center; position: relative; overflow: hidden; transition: transform 0.2s, background-color 0.3s; }
         #meu-dashboard-customizado .card:hover { transform: translateY(-3px); }
         #meu-dashboard-customizado .card.green { background-color: rgba(105, 240, 174, 0.98); color: #263238; }
@@ -88,7 +119,14 @@
         <div id="meu-dashboard-customizado">
             <div class="navbar">
                 <div class="nav-left">
-                    <div class="brand">CSA CLUSTER SC/PR</div>
+                    <div class="brand" id="painel-titulo">CSA CLUSTER SC/PR</div>
+
+                    <div class="seletor-setor">
+                        <button class="btn-setor ativo" data-setor="CSA">CSA CLUSTER</button>
+                        <button class="btn-setor" data-setor="SAC">SAC FIN</button>
+                        <button class="btn-setor" data-setor="FILAN2">FILA N2</button>
+                    </div>
+
                     <button class="tab-btn active" data-tab="wallboard">Monitoramento</button>
                     <button class="tab-btn" data-tab="agentes">Agentes On Line</button>
 
@@ -99,41 +137,20 @@
                     </div>
                 </div>
                 <div class="edit-controls">
-                    <button id="btnFecharDash" class="btn-fechar-dash">X Fechar Painel</button>
+                    <button id="btnFecharDash" style="background:#FF1744; color:white; border:none; padding:8px 15px; border-radius:4px; font-weight:bold; cursor:pointer;">X FECHAR</button>
                 </div>
             </div>
 
             <div class="main-content">
                 <div id="wallboard" class="tab-pane active">
                     <div class="grid-dashboard">
-                        <div class="card green">
-                            <div class="card-title">Espera Mais Longa</div>
-                            <div class="card-value" id="card1">-</div>
-                        </div>
-                        <div class="card">
-                            <div class="card-title" style="color:#333">N. De Chamadas Em Espera</div>
-                            <div class="donut-container" id="chart-bg-2"><div class="donut-number" id="card2" data-chart="chart-bg-2">0</div></div>
-                        </div>
-                        <div class="card">
-                            <div class="card-title" style="color:#333">Núm. De Agentes Em Chamada</div>
-                            <div class="donut-container" id="chart-bg-3"><div class="donut-number" id="card3" data-chart="chart-bg-3">0</div></div>
-                        </div>
-                        <div class="card">
-                            <div class="card-title" style="color:#333">Agentes Disponíveis</div>
-                            <div class="donut-container" id="chart-bg-4"><div class="donut-number" id="card4" data-chart="chart-bg-4">0</div></div>
-                        </div>
-                        <div class="card blue">
-                            <div class="card-title">Chamadas Oferecidas</div>
-                            <div class="card-value" id="card5">0</div><div class="card-sub">Chamadas Oferecidas</div>
-                        </div>
-                        <div class="card blue">
-                            <div class="card-title">Chamadas Atendidas</div>
-                            <div class="card-value" id="card6">0</div><div class="card-sub">Chamadas Atendidas</div>
-                        </div>
-                        <div class="card" id="card-perdidas-container">
-                            <div class="card-title">Chamadas Perdidas</div>
-                            <div class="card-value" id="card7">0</div><div class="card-sub">Chamadas Perdidas</div>
-                        </div>
+                        <div class="card green"><div class="card-title">Espera Mais Longa</div><div class="card-value" id="card1">-</div></div>
+                        <div class="card"><div class="card-title" style="color:#333">N. De Chamadas Em Espera</div><div class="donut-container" id="chart-bg-2"><div class="donut-number" id="card2" data-chart="chart-bg-2">0</div></div></div>
+                        <div class="card"><div class="card-title" style="color:#333">Núm. De Agentes Em Chamada</div><div class="donut-container" id="chart-bg-3"><div class="donut-number" id="card3" data-chart="chart-bg-3">0</div></div></div>
+                        <div class="card"><div class="card-title" style="color:#333">Agentes Disponíveis</div><div class="donut-container" id="chart-bg-4"><div class="donut-number" id="card4" data-chart="chart-bg-4">0</div></div></div>
+                        <div class="card blue"><div class="card-title">Chamadas Oferecidas</div><div class="card-value" id="card5">0</div><div class="card-sub">Chamadas Oferecidas</div></div>
+                        <div class="card blue"><div class="card-title">Chamadas Atendidas</div><div class="card-value" id="card6">0</div><div class="card-sub">Chamadas Atendidas</div></div>
+                        <div class="card" id="card-perdidas-container"><div class="card-title">Chamadas Perdidas</div><div class="card-value" id="card7">0</div><div class="card-sub">Chamadas Perdidas</div></div>
                         <div class="stats-column">
                             <div class="card-title" style="width:100%; text-align:center; margin-bottom:20px; color:#333;">Méd. Da Fila</div>
                             <div class="stat-item"><div class="stat-time" id="stat1">00:00:00</div><div class="stat-label">Méd. Conversação</div></div>
@@ -141,17 +158,11 @@
                         </div>
                     </div>
                 </div>
-
                 <div id="agentes" class="tab-pane">
                     <div class="panel-header"><span>Status da Equipe em Tempo Real</span></div>
                     <div class="table-container">
                         <table>
-                            <thead>
-                                <tr>
-                                    <th style="text-align:center; width: 60px;">Status</th>
-                                    <th>Agente</th><th>Extensão</th><th>Estado / Pausa</th><th>Fila</th><th>Tempo (Estado)</th>
-                                </tr>
-                            </thead>
+                            <thead><tr><th style="text-align:center; width: 60px;">Status</th><th>Agente</th><th>Extensão</th><th>Estado / Pausa</th><th>Fila</th><th>Tempo (Estado)</th></tr></thead>
                             <tbody id="agentes-body"></tbody>
                         </table>
                     </div>
@@ -162,20 +173,57 @@
 
     
     const styleEl = document.createElement('style'); styleEl.innerHTML = estilos; document.head.appendChild(styleEl);
-
-    const overlay = document.createElement('div');
-    overlay.id = "overlay-dashboard-customizado";
-    overlay.style.cssText = "position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 100000; display: none; overflow-y: auto;";
+    const overlay = document.createElement('div'); overlay.id = "overlay-dashboard-customizado"; overlay.style.cssText = "position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 100000; display: none; overflow-y: auto;";
     overlay.innerHTML = htmlDashboard; document.body.appendChild(overlay);
 
-    const btnAbrir = document.createElement('button');
-    btnAbrir.innerHTML = "📊 Abrir Painel CSA CLUSTER";
-    btnAbrir.style.cssText = "position: fixed; top: 10px; right: 50px; z-index: 99999; padding: 6px 15px; background: #40C4FF; color: #000; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.3);";
-    setTimeout(() => { document.body.appendChild(btnAbrir); }, 2000);
+    
+    function abrirPainel(idSetor) {
+        setorAtivo = idSetor;
 
-    btnAbrir.onclick = () => { overlay.style.display = 'block'; };
+        
+        document.querySelectorAll('.btn-setor').forEach(b => {
+            b.classList.remove('ativo');
+            if(b.dataset.setor === idSetor) b.classList.add('ativo');
+        });
+
+        
+        document.getElementById('painel-titulo').innerText = CONFIG_SETORES[idSetor].titulo;
+        document.getElementById('agentes-body').innerHTML = '';
+        ['card1','card2','card3','card4','card5','card6','card7','stat1','stat2'].forEach(id => {
+            const el = document.getElementById(id); if(el) el.innerText = (id === 'card1' || id.includes('stat')) ? '00:00:00' : '0';
+        });
+
+        extrairEAtualizar(); // Força uma atualização logo de cara
+        overlay.style.display = 'block';
+    }
+
+    
+    const launcherContainer = document.createElement('div');
+    launcherContainer.style.cssText = "position: fixed; top: 10px; right: 50px; z-index: 99999; display: flex; gap: 10px;";
+
+    const botoesLancadores = [
+        { id: 'CSA', label: '📊 CSA', cor: CONFIG_SETORES['CSA'].corBotao },
+        { id: 'SAC', label: '📊 SAC FIN', cor: CONFIG_SETORES['SAC'].corBotao },
+        { id: 'FILAN2', label: '📊 FILA N2', cor: CONFIG_SETORES['FILAN2'].corBotao }
+    ];
+
+    botoesLancadores.forEach(s => {
+        const btn = document.createElement('button');
+        btn.innerHTML = s.label;
+        btn.style.cssText = `padding: 6px 15px; background: ${s.cor}; color: #000; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.4); transition: 0.2s;`;
+        btn.onmouseover = () => btn.style.filter = "brightness(1.15)";
+        btn.onmouseout = () => btn.style.filter = "brightness(1)";
+
+        btn.onclick = () => abrirPainel(s.id);
+        launcherContainer.appendChild(btn);
+    });
+
+    setTimeout(() => { document.body.appendChild(launcherContainer); }, 2000);
+
+    
     document.getElementById('btnFecharDash').onclick = () => { overlay.style.display = 'none'; };
 
+    
     document.querySelectorAll('#meu-dashboard-customizado .tab-btn').forEach(btn => {
         btn.onclick = function() {
             document.querySelectorAll('#meu-dashboard-customizado .tab-pane').forEach(p => p.classList.remove('active'));
@@ -184,17 +232,20 @@
         }
     });
 
-   
+    
+    document.querySelectorAll('.btn-setor').forEach(btn => {
+        btn.onclick = function() { abrirPainel(this.dataset.setor); }
+    });
+
+    
     setInterval(() => {
-        const agora = new Date();
-        document.getElementById('relogio-digital').innerText = agora.toLocaleTimeString('pt-BR');
+        document.getElementById('relogio-digital').innerText = new Date().toLocaleTimeString('pt-BR');
     }, 1000);
 
-   
     function setStatusPainel(ok) {
         const dot = document.getElementById('dot-painel'); const txt = document.getElementById('txt-painel');
         if (ok) { dot.className = "conn-dot dot-ok"; txt.innerText = "Painel: OK"; txt.style.color = "#00E676"; }
-        else { dot.className = "conn-dot dot-erro"; txt.innerText = "Painel: Erro Leitura"; txt.style.color = "#FF1744"; }
+        else { dot.className = "conn-dot dot-erro"; txt.innerText = "Painel: Fila Oculta"; txt.style.color = "#FF1744"; }
     }
     function setStatusRobo(estado) {
         const dot = document.getElementById('dot-robo'); const txt = document.getElementById('txt-robo');
@@ -204,7 +255,6 @@
     }
 
     
-
     function atualizarGraficosVisuais(cardId, chartId, valor) {
         const val = parseInt(valor) || 0;
         if (chartId) {
@@ -218,6 +268,7 @@
     }
 
     function extrairEAtualizar() {
+        const configuracaoAtual = CONFIG_SETORES[setorAtivo];
         const linhas = document.querySelectorAll('tr');
 
         let ativas = "0", emFila = "0", espera = "00:00:00", disp = "0";
@@ -232,13 +283,18 @@
 
             const textoLinha = linha.innerText.toUpperCase();
 
-            if (textoLinha.includes('FILA_CSA_GGNET') && textoLinha.includes('GGNET_ALT')) {
+           
+            if (textoLinha.includes(configuracaoAtual.fila) && textoLinha.includes('GGNET_ALT')) {
+                if (configuracaoAtual.fila === 'FILA_CSA_GGNET' && textoLinha.includes('FILA_CSA_N2')) return;
+
                 achouFilaPrincipal = true;
                 const getVal = (idx) => colunas[idx] ? colunas[idx].innerText.split('\\n')[0].trim() : "0";
                 ativas = getVal(3); emFila = getVal(4); espera = getVal(5); disp   = getVal(6);
             }
 
-            if (textoLinha.includes('GRUPO_CSA_GGNET') && colunas.length >= 8) {
+            if (textoLinha.includes(configuracaoAtual.grupo) && colunas.length >= 8) {
+                if (configuracaoAtual.grupo === 'GRUPO_CSA_GGNET' && textoLinha.includes('GRUPO_CSA_N2')) return;
+
                 let nome = colunas[1] ? colunas[1].innerText.trim() : "Agente";
                 let ramal = colunas[2] ? colunas[2].innerText.trim() : "-";
                 let estadoBruto = colunas[3] ? colunas[3].innerText.trim() : "";
@@ -261,20 +317,19 @@
                     <td><div class="status-icon ${styleClass}" title="${textoEstado}">${icon}</div></td>
                     <td style="font-weight: 800;">${nome}</td><td>${ramal}</td>
                     <td style="font-weight: 800; color: ${corEstadoTexto};">${textoEstado}</td>
-                    <td>FILA_CSA_GGNET</td><td>${tempo}</td>
+                    <td>${configuracaoAtual.fila}</td><td>${tempo}</td>
                 `;
                 if(tbody) tbody.appendChild(tr);
             }
         });
 
-        
         setStatusPainel(achouFilaPrincipal);
 
         
         let ofer = "0", atend = "0", perdidas = 0, medConv = "00:00:00", medEsp = "00:00:00";
 
         try {
-            const dadosSalvos = localStorage.getItem('csa_dados_relatorio');
+            const dadosSalvos = localStorage.getItem(configuracaoAtual.gaveta);
             if (dadosSalvos) {
                 const dados = JSON.parse(dadosSalvos);
                 ofer = dados.oferecidas || "0";
@@ -283,13 +338,12 @@
                 medConv = dados.medConversacao || "00:00:00";
                 medEsp = dados.medEspera || "00:00:00";
 
-                
                 const agora = Date.now();
                 const diffSegundos = (agora - (dados.timestamp || 0)) / 1000;
 
-                if (diffSegundos < 15) { setStatusRobo('ok'); } // Atualizado há menos de 15s
-                else if (diffSegundos < 60) { setStatusRobo('warn'); } // Atrasado (15s a 60s)
-                else { setStatusRobo('erro'); } // Parado há mais de 1 minuto (Fechou a aba)
+                if (diffSegundos < 15) { setStatusRobo('ok'); }
+                else if (diffSegundos < 60) { setStatusRobo('warn'); }
+                else { setStatusRobo('erro'); }
 
             } else { setStatusRobo('warn'); }
         } catch(e) { setStatusRobo('erro'); }
